@@ -1,0 +1,61 @@
+{
+  "routines": [
+    {
+      "id": "routine_0_1769048904.9765",
+      "name": "아침 물",
+      "category": "건강",
+      "time": "08:00",
+      "duration": 2,
+      "description": "",
+      "flexible": true,
+      "active": true,
+      "created_at": "2026-01-22T11:28:24.976574"
+    },
+    {
+      "id": "routine_1_1769048906.888093",
+      "name": "아침 물",
+      "category": "건강",
+      "time": "08:00",
+      "duration": 2,
+      "description": "",
+      "flexible": true,
+      "active": true,
+      "created_at": "2026-01-22T11:28:26.888118"
+    },
+    {
+      "id": "routine_2_1769048960.598599",
+      "name": "자격증 공부",
+      "category": "학습",
+      "time": "20:00",
+      "duration": 16,
+      "description": "",
+      "flexible": true,
+      "active": true,
+      "created_at": "2026-01-22T11:29:20.598631"
+    },
+    {
+      "id": "routine_3_1769048966.395931",
+      "name": "자격증 공부",
+      "category": "학습",
+      "time": "20:00",
+      "duration": 120,
+      "description": "",
+      "flexible": true,
+      "active": true,
+      "created_at": "2026-01-22T11:29:26.395955"
+    }
+  ],
+  "completions": [
+    {
+      "routine_id": "routine_0_1769048904.9765",
+      "date": "2026-01-22",
+      "timestamp": "2026-01-22T11:28:44.617589",
+      "notes": ""
+    }
+  ],
+  "user_profile": {
+    "name": "",
+    "goals": [],
+    "preferences": {}
+  }
+}
