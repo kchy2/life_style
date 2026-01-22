@@ -149,7 +149,21 @@ st.markdown("""
         position: relative !important;
         width: 100% !important;
     }
-    
+
+    .calendar-day-wrapper .stButton > button {
+        background: white !important;
+        color: #2C3E50 !important;
+        border: 2px solid #E2E8F0 !important;
+    }
+
+    /* ★ 오늘 날짜만 초록색으로 강조 (우선순위 최상위) */
+    .calendar-day-wrapper .stButton > button[data-testid*="baseButton-primary"] {
+        background-color: #B8F2A3 !important;
+        background: #B8F2A3 !important;
+        color: #2D8F0B !important;
+        border: 2px solid #2D8F0B !important;
+    }
+
     .main-button-wrapper .stButton > button:hover {
         background: #A8E893 !important;
         transform: translateY(-2px) !important;
@@ -234,7 +248,6 @@ st.markdown("""
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        min-height: 100vh;
         width: 100%;
         padding: 2rem;
     }
@@ -302,6 +315,18 @@ st.markdown("""
         background: #A8E893 !important;
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(184, 242, 163, 0.4);
+    }
+    
+    /* 오늘 날짜 버튼 연두색 스타일 */
+    .calendar-container .stButton > button[data-testid*="baseButton-primary"] {
+        background: #B8F2A3 !important;
+        color: #2D8F0B !important;
+        border-color: #B8F2A3 !important;
+    }
+    
+    .calendar-container .stButton > button[data-testid*="baseButton-primary"]:hover {
+        background: #A8E893 !important;
+        border-color: #A8E893 !important;
     }
     
     /* 기록 카드 스타일 */
@@ -575,16 +600,65 @@ st.markdown("""
         padding: 2rem;
         margin: 2rem 0;
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-        max-width: 1000px;
+        width: 200px;
+        max-width: 200px;
+        height: 60px;
         margin-left: auto;
         margin-right: auto;
+        display: flex;
+        justify-content: center; 
+        align-items: center; 
+    }
+    
+    /* 캘린더 날짜 셀에 기록 표시용 동그라미 */
+    /* 1. 버튼 주위의 여백(보라색 영역)을 제거 */
+    .calendar-day-wrapper .stButton {
+        padding: 0 !important;
+        margin: 0 !important;
+        width: 100% !important;
+    }
+
+    .calendar-day-wrapper .stButton > button {
+        padding: 4px 0 !important; /* 위아래 여백을 4px로 최소화 */
+        margin: 0 !important;
+        min-height: 40px !important; /* 모든 버튼 높이 통일 */
+        width: 100% !important;
+    }
+
+    /* 2. 초록색 점을 버튼 하단에 겹쳐서 배치 */
+    .calendar-record-indicator {
+        position: absolute;
+        bottom: 6px;           /* 버튼 하단에서 6px 위치 */
+        left: 50%;
+        transform: translateX(-50%); /* 가로 중앙 정렬 */
+        width: 6px;
+        height: 6px;
+        background: #2D8F0B !important; /* 더 진한 초록색으로 가독성 확보 */
+        border-radius: 50%;
+        pointer-events: none;  /* 클릭 방해 안 되게 함 */
+        z-index: 100;          /* 버튼보다 위에 표시 */
+    }
+    
+    /* 기록 표시용 초록 점 (버튼 아래에 표시, 버튼에 가깝게) */
+    .calendar-record-indicator {
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        background: #AEEDB9 !important;
+        border-radius: 50%;
+        margin-top: 2px;
+        margin-bottom: 2px;
     }
     
     .calendar-header {
-        display: flex;
-        justify-content: space-between;
+        justify-content: center;
         align-items: center;
-        margin-bottom: 1.5rem;
+    }
+    
+    .calendar-header h2 {
+        font-size: 1.2rem !important;
+        text-align: center;
+        margin: 0;
     }
     
     .calendar-grid {
@@ -668,6 +742,26 @@ st.markdown("""
     .calendar-day {
         cursor: pointer;
     }
+    
+    /* 캘린더 버튼의 padding과 margin 줄이기 */
+    .calendar-day-wrapper .stButton {
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    
+    .calendar-day-wrapper .stButton > button {
+        padding: 0.3rem !important;
+        margin: 0 !important;
+        min-height: auto !important;
+    }
+    
+    /* Streamlit 제목의 앵커 링크 아이콘 숨기기 */
+    .stMarkdown h2 a,
+    .stMarkdown h1 a,
+    .stMarkdown h3 a,
+    .calendar-header h2 a {
+        display: none !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -712,13 +806,6 @@ if 'show_csv_upload' not in st.session_state:
 # 데이터베이스 초기화
 init_database()
 
-# JSON에서 데이터베이스로 마이그레이션 (한 번만 실행)
-if not st.session_state.migrated:
-    if os.path.exists("daily_records.json"):
-        migrated_count = migrate_from_json("daily_records.json")
-        if migrated_count > 0:
-            st.session_state.migrated = True
-            st.success(f"✅ {migrated_count}개의 기록이 데이터베이스로 마이그레이션되었습니다!")
 
 def add_record(activity, category, start_time, end_time, memo, record_date=None):
     """새 기록 추가 (데이터베이스)"""
@@ -848,7 +935,7 @@ def create_calendar_view():
     st.markdown(f"""
     <div class="calendar-container">
         <div class="calendar-header">
-            <h2 style="margin: 0; color: #2C3E50;">{year}년 {month}월</h2>
+            <h2 style="margin: 0; color: #2C3E50; text-align: center; font-size: 1.2rem;">{year}년 {month}월</h2>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -893,6 +980,9 @@ def create_calendar_view():
         has_records = count > 0
         
         with week_cols[col_idx]:
+            # 날짜 셀을 감싸는 컨테이너
+            st.markdown('<div class="calendar-day-wrapper">', unsafe_allow_html=True)
+
             # 날짜 버튼 레이블 (개수 제거, 날짜만 표시)
             button_label = str(day)
             
@@ -909,24 +999,27 @@ def create_calendar_view():
                 button_type = "primary"
             
             # 버튼 클릭 처리
-            clicked = False
-            if button_type == "primary":
-                clicked = st.button(
-                    button_label,
-                    key=f"cal_btn_{date_str}",
-                    use_container_width=True,
-                    type="primary",
-                    help=tooltip_message
-                )
-            else:
-                clicked = st.button(
-                    button_label,
-                    key=f"cal_btn_{date_str}",
-                    use_container_width=True,
-                    type="secondary",
-                    help=tooltip_message
-                )
+            # 버튼 생성
+            clicked = st.button(
+                button_label, 
+                key=f"cal_btn_{date_str}", 
+                use_container_width=True, 
+                type=button_type, # 오늘만 primary가 들어감
+                help=tooltip_message
+            )
             
+            # 기록이 있는 경우: CSS에 정의된 클래스를 사용하여 버튼 위에 겹침
+            if count > 0:
+                # div의 margin-top을 2px로 변경하여 버튼과의 간격을 벌림
+                st.markdown(f'''
+                    <div style="text-align: center; margin-top: 2px; margin-bottom: 4px;">
+                        <div class="calendar-record-indicator"></div>
+                    </div>
+                ''', unsafe_allow_html=True)
+
+            # wrapper 끝
+            st.markdown('</div>', unsafe_allow_html=True)
+
             if clicked:
                 st.session_state.selected_calendar_date = current_date
                 st.rerun()
@@ -934,10 +1027,6 @@ def create_calendar_view():
             # 선택된 날짜 표시 (버튼 아래에 표시)
             if is_selected and not is_today:
                 st.markdown(f'<div style="text-align: center; color: #667eea; font-weight: 600; font-size: 0.8rem; margin-top: 0.2rem;">✓ 선택됨</div>', unsafe_allow_html=True)
-            
-            # 기록이 있는 날짜는 작은 점으로 표시 (선택사항)
-            if count > 0 and not is_selected:
-                st.markdown(f'<div style="text-align: center; margin-top: 0.1rem;"><span style="display: inline-block; width: 6px; height: 6px; background: #B8F2A3; border-radius: 50%;"></span></div>', unsafe_allow_html=True)
         
         col_idx += 1
     
@@ -949,7 +1038,7 @@ def create_calendar_view():
                 week_cols = st.columns(7)
                 col_idx = 0
             with week_cols[col_idx]:
-                st.markdown(f'<div style="text-align: center; padding: 0.5rem; color: #A0AEC0; opacity: 0.3;">{i+1}</div>', unsafe_allow_html=True)
+                st.markdown('<div class="calendar-day-wrapper">', unsafe_allow_html=True)
             col_idx += 1
     
     # 월 이동 버튼
@@ -1046,73 +1135,6 @@ def create_calendar_view():
                 st.session_state.selected_record_date = st.session_state.selected_calendar_date
                 st.rerun()
 
-def _display_feedback(feedback_data, refresh_key):
-    """피드백 데이터를 표시하는 헬퍼 함수"""
-    if feedback_data and 'feedbacks' in feedback_data:
-        # 요약 표시
-        if 'summary' in feedback_data:
-            st.markdown(f"""
-            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                        padding: 1.5rem; 
-                        border-radius: 12px; 
-                        margin-bottom: 1.5rem;
-                        color: white;
-                        text-align: center;
-                        font-size: 1.1rem;
-                        font-weight: 500;">
-                {feedback_data['summary']}
-            </div>
-            """, unsafe_allow_html=True)
-        
-        # 피드백 카드 표시
-        feedbacks = feedback_data['feedbacks']
-        
-        # 타입별 색상 정의
-        type_colors = {
-            'positive': {'bg': '#E8F5E9', 'border': '#4CAF50', 'icon': '✅'},
-            'suggestion': {'bg': '#FFF3E0', 'border': '#FF9800', 'icon': '💡'},
-            'neutral': {'bg': '#E3F2FD', 'border': '#2196F3', 'icon': '📊'}
-        }
-        
-        # 피드백을 타입별로 정렬 (positive -> suggestion -> neutral)
-        type_order = ['positive', 'suggestion', 'neutral']
-        sorted_feedbacks = sorted(feedbacks, key=lambda x: type_order.index(x.get('type', 'neutral')) if x.get('type', 'neutral') in type_order else 999)
-        
-        for idx, feedback in enumerate(sorted_feedbacks):
-            feedback_type = feedback.get('type', 'neutral')
-            colors = type_colors.get(feedback_type, type_colors['neutral'])
-            
-            st.markdown(f"""
-            <div style="background: {colors['bg']}; 
-                        border-left: 4px solid {colors['border']}; 
-                        padding: 1.5rem; 
-                        border-radius: 8px; 
-                        margin-bottom: 1rem;
-                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                <div style="display: flex; align-items: center; margin-bottom: 0.5rem;">
-                    <span style="font-size: 1.5rem; margin-right: 0.5rem;">{colors['icon']}</span>
-                    <h3 style="margin: 0; color: #2C3E50; font-size: 1.2rem;">{feedback.get('title', '피드백')}</h3>
-                </div>
-                <p style="margin: 0; color: #4A5568; line-height: 1.6; font-size: 1rem;">{feedback.get('description', '')}</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        # 타임스탬프 표시
-        if 'timestamp' in feedback_data:
-            st.markdown(f"""
-            <div style="text-align: center; color: #A0AEC0; font-size: 0.85rem; margin-top: 1rem;">
-                마지막 업데이트: {feedback_data['timestamp']}
-            </div>
-            """, unsafe_allow_html=True)
-        
-        # 새로고침 버튼
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            if st.button("🔄 피드백 새로고침", use_container_width=True, key=refresh_key):
-                st.rerun()
-    else:
-        st.info("피드백을 생성할 수 없습니다. 기록을 추가해보세요!")
-
 def create_visualizations():
     """데이터베이스 기록 시각화 생성"""
     all_records = get_all_records()
@@ -1135,7 +1157,7 @@ def create_visualizations():
     tab1, tab2, tab3, tab4 = st.tabs(["📅 날짜별 통계", "📊 카테고리별 통계", "⏰ 시간 분석", "📈 전체 통계"])
     
     with tab1:
-        st.subheader("날짜별 기록 수")
+        st.subheader("날짜별 카테고리 기록")
         
         # 최근 30일 데이터
         end_date = datetime.now().date()
@@ -1145,44 +1167,50 @@ def create_visualizations():
         if recent_records:
             df_recent = pd.DataFrame(recent_records)
             df_recent['date'] = pd.to_datetime(df_recent['date'])
-            daily_count = df_recent.groupby('date').size().reset_index(name='count')
-            daily_count = daily_count.sort_values('date')
             
+            # 날짜별 카테고리별 기록 수 계산
+            daily_category_count = df_recent.groupby(['date', 'category']).size().reset_index(name='count')
+            daily_category_count = daily_category_count.sort_values('date')
+            
+            # 카테고리 순서 정의
+            category_order = ["수면", "식사", "일과", "운동", "취미", "기타"]
+            
+            # 스택 바 차트로 날짜별 카테고리별 기록 표시
             fig = px.bar(
-                daily_count, 
-                x='date', 
+                daily_category_count,
+                x='date',
                 y='count',
-                title="최근 30일 기록 수",
-                labels={'date': '날짜', 'count': '기록 수'},
-                color='count',
-                color_continuous_scale='Greens'
+                color='category',
+                title="최근 30일 날짜별 카테고리 기록",
+                labels={'date': '날짜', 'count': '기록 수', 'category': '카테고리'},
+                color_discrete_map={
+                    '수면': '#87CEEB',
+                    '식사': '#B0E0E6',
+                    '일과': '#ADD8E6',
+                    '운동': '#E0F6FF',
+                    '취미': '#C6E2FF',
+                    '기타': '#A8D8EA'
+                },
+                category_orders={'category': category_order}
             )
             fig.update_layout(
                 plot_bgcolor='rgba(0,0,0,0)',
                 paper_bgcolor='rgba(0,0,0,0)',
                 font=dict(family="Noto Sans KR", size=12),
-                height=400
+                height=400,
+                barmode='stack',  # 스택 모드로 카테고리를 쌓아서 표시
+                legend=dict(
+                    title="카테고리",
+                    orientation="v",
+                    yanchor="top",
+                    y=1,
+                    xanchor="left",
+                    x=1.02
+                )
             )
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("최근 30일간의 기록이 없습니다.")
-        
-        # 날짜별 통계에 특화된 실시간 피드백
-        st.markdown("---")
-        st.markdown("""
-        <div style="max-width: 1000px; margin: 2rem auto;">
-            <h3 style="text-align: center; color: #2C3E50; margin-bottom: 1rem;">💬 날짜별 통계 피드백</h3>
-            <p style="text-align: center; color: #6C7A89; margin-bottom: 2rem;">날짜별 기록 패턴에 대한 AI 분석입니다</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        with st.spinner("피드백을 생성하는 중..."):
-            try:
-                feedback_data = get_realtime_feedback("date")
-                _display_feedback(feedback_data, "refresh_feedback_date")
-            except Exception as e:
-                st.error(f"피드백을 불러오는 중 오류가 발생했습니다: {str(e)}")
-                st.info("잠시 후 다시 시도해주세요.")
     
     with tab2:
         st.subheader("카테고리별 분포")
@@ -1263,23 +1291,6 @@ def create_visualizations():
                 xaxis_tickangle=-45
             )
             st.plotly_chart(fig_bar, use_container_width=True)
-        
-        # 카테고리별 통계에 특화된 실시간 피드백
-        st.markdown("---")
-        st.markdown("""
-        <div style="max-width: 1000px; margin: 2rem auto;">
-            <h3 style="text-align: center; color: #2C3E50; margin-bottom: 1rem;">💬 카테고리별 통계 피드백</h3>
-            <p style="text-align: center; color: #6C7A89; margin-bottom: 2rem;">카테고리별 시간 분배에 대한 AI 분석입니다</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        with st.spinner("피드백을 생성하는 중..."):
-            try:
-                feedback_data = get_realtime_feedback("category")
-                _display_feedback(feedback_data, "refresh_feedback_category")
-            except Exception as e:
-                st.error(f"피드백을 불러오는 중 오류가 발생했습니다: {str(e)}")
-                st.info("잠시 후 다시 시도해주세요.")
     
     with tab3:
         st.subheader("시간대별 활동 분석")
@@ -1339,23 +1350,6 @@ def create_visualizations():
             xaxis_tickangle=-45
         )
         st.plotly_chart(fig_avg, use_container_width=True)
-        
-        # 시간 분석에 특화된 실시간 피드백
-        st.markdown("---")
-        st.markdown("""
-        <div style="max-width: 1000px; margin: 2rem auto;">
-            <h3 style="text-align: center; color: #2C3E50; margin-bottom: 1rem;">💬 시간 분석 피드백</h3>
-            <p style="text-align: center; color: #6C7A89; margin-bottom: 2rem;">시간대별 활동 패턴에 대한 AI 분석입니다</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        with st.spinner("피드백을 생성하는 중..."):
-            try:
-                feedback_data = get_realtime_feedback("time")
-                _display_feedback(feedback_data, "refresh_feedback_time")
-            except Exception as e:
-                st.error(f"피드백을 불러오는 중 오류가 발생했습니다: {str(e)}")
-                st.info("잠시 후 다시 시도해주세요.")
     
     with tab4:
         st.subheader("전체 통계 요약")
@@ -1386,10 +1380,26 @@ def create_visualizations():
             # 카테고리 순서 정의
             category_order = ["수면", "식사", "일과", "운동", "취미", "기타"]
             
-            category_df = pd.DataFrame([
+            # 카테고리별 기록 수
+            category_count_data = [
                 {'카테고리': k, '기록 수': v} 
                 for k, v in stats['category_stats'].items()
-            ])
+            ]
+            
+            # 카테고리별 시간 계산
+            category_time_data = df.groupby('category')['duration_minutes'].sum().reset_index()
+            category_time_data['시간(시간)'] = (category_time_data['duration_minutes'] / 60).round(2)
+            
+            # 데이터 병합
+            category_df = pd.DataFrame(category_count_data)
+            category_df = category_df.merge(
+                category_time_data[['category', '시간(시간)']], 
+                left_on='카테고리', 
+                right_on='category', 
+                how='left'
+            )
+            category_df = category_df.drop('category', axis=1)
+            category_df['시간(시간)'] = category_df['시간(시간)'].fillna(0)
             
             # 카테고리 순서에 따라 정렬 (지정된 순서 우선, 그 다음 기록 수 순)
             category_df['순서'] = category_df['카테고리'].apply(
@@ -1397,6 +1407,9 @@ def create_visualizations():
             )
             category_df = category_df.sort_values(['순서', '기록 수'], ascending=[True, False])
             category_df = category_df.drop('순서', axis=1)
+            
+            # 컬럼 순서: 카테고리, 기록 수, 시간
+            category_df = category_df[['카테고리', '기록 수', '시간(시간)']]
             
             st.dataframe(category_df, use_container_width=True, hide_index=True)
         
@@ -1451,23 +1464,88 @@ def create_visualizations():
             st.plotly_chart(fig_weekly, use_container_width=True)
         else:
             st.info("최근 7일간의 기록이 없습니다.")
-        
-        # 전체 통계에 특화된 실시간 피드백
-        st.markdown("---")
-        st.markdown("""
-        <div style="max-width: 1000px; margin: 2rem auto;">
-            <h3 style="text-align: center; color: #2C3E50; margin-bottom: 1rem;">💬 전체 통계 피드백</h3>
-            <p style="text-align: center; color: #6C7A89; margin-bottom: 2rem;">전체적인 루틴 패턴에 대한 AI 종합 분석입니다</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        with st.spinner("피드백을 생성하는 중..."):
-            try:
-                feedback_data = get_realtime_feedback("overall")
-                _display_feedback(feedback_data, "refresh_feedback_overall")
-            except Exception as e:
-                st.error(f"피드백을 불러오는 중 오류가 발생했습니다: {str(e)}")
-                st.info("잠시 후 다시 시도해주세요.")
+    
+    # 실시간 피드백 섹션 추가
+    st.markdown("---")
+    st.markdown("""
+    <div style="max-width: 1000px; margin: 2rem auto;">
+        <h2 style="text-align: center; color: #2C3E50; margin-bottom: 1rem;">💬 실시간 피드백</h2>
+        <p style="text-align: center; color: #6C7A89; margin-bottom: 2rem;">AI가 분석한 당신의 루틴 패턴에 대한 피드백입니다</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # 피드백 로딩 및 표시
+    with st.spinner("피드백을 생성하는 중..."):
+        try:
+            feedback_data = get_realtime_feedback()
+            
+            if feedback_data and 'feedbacks' in feedback_data:
+                # 요약 표시
+                if 'summary' in feedback_data:
+                    st.markdown(f"""
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                                padding: 1.5rem; 
+                                border-radius: 12px; 
+                                margin-bottom: 1.5rem;
+                                color: white;
+                                text-align: center;
+                                font-size: 1.1rem;
+                                font-weight: 500;">
+                        {feedback_data['summary']}
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                # 피드백 카드 표시
+                feedbacks = feedback_data['feedbacks']
+                
+                # 타입별 색상 정의
+                type_colors = {
+                    'positive': {'bg': '#E8F5E9', 'border': '#4CAF50', 'icon': '✅'},
+                    'suggestion': {'bg': '#FFF3E0', 'border': '#FF9800', 'icon': '💡'},
+                    'neutral': {'bg': '#E3F2FD', 'border': '#2196F3', 'icon': '📊'}
+                }
+                
+                # 피드백을 타입별로 정렬 (positive -> suggestion -> neutral)
+                type_order = ['positive', 'suggestion', 'neutral']
+                sorted_feedbacks = sorted(feedbacks, key=lambda x: type_order.index(x.get('type', 'neutral')) if x.get('type', 'neutral') in type_order else 999)
+                
+                for idx, feedback in enumerate(sorted_feedbacks):
+                    feedback_type = feedback.get('type', 'neutral')
+                    colors = type_colors.get(feedback_type, type_colors['neutral'])
+                    
+                    st.markdown(f"""
+                    <div style="background: {colors['bg']}; 
+                                border-left: 4px solid {colors['border']}; 
+                                padding: 1.5rem; 
+                                border-radius: 8px; 
+                                margin-bottom: 1rem;
+                                box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                        <div style="display: flex; align-items: center; margin-bottom: 0.5rem;">
+                            <span style="font-size: 1.5rem; margin-right: 0.5rem;">{colors['icon']}</span>
+                            <h3 style="margin: 0; color: #2C3E50; font-size: 1.2rem;">{feedback.get('title', '피드백')}</h3>
+                        </div>
+                        <p style="margin: 0; color: #4A5568; line-height: 1.6; font-size: 1rem;">{feedback.get('description', '')}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                # 타임스탬프 표시
+                if 'timestamp' in feedback_data:
+                    st.markdown(f"""
+                    <div style="text-align: center; color: #A0AEC0; font-size: 0.85rem; margin-top: 1rem;">
+                        마지막 업데이트: {feedback_data['timestamp']}
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                # 새로고침 버튼
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    if st.button("🔄 피드백 새로고침", use_container_width=True, key="refresh_feedback"):
+                        st.rerun()
+            else:
+                st.info("피드백을 생성할 수 없습니다. 기록을 추가해보세요!")
+        except Exception as e:
+            st.error(f"피드백을 불러오는 중 오류가 발생했습니다: {str(e)}")
+            st.info("잠시 후 다시 시도해주세요.")
 
 # 메인 화면 - 디자인에 맞춘 초기 화면
 if not st.session_state.show_record_form and not st.session_state.show_records and not st.session_state.show_category_modal and not st.session_state.show_calendar and not st.session_state.editing_record_id and not st.session_state.deleting_record_id and not st.session_state.show_visualizations:
@@ -2080,82 +2158,23 @@ if st.session_state.show_category_modal and not st.session_state.editing_record_
     if st.session_state.selected_record_date:
         record_date_display = f" ({st.session_state.selected_record_date.strftime('%Y년 %m월 %d일')})"
     
+    # [수정 포인트] 시각화 화면과 동일한 '중앙 타이틀' 구조 적용
     st.markdown(f"""
-    <div class="center-content" style="background: #F7F9FA; min-height: 100vh;">
-        <div class="record-form-container" style="max-width: 700px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-                <h2 class="modal-title" style="margin: 0;">루틴 카테고리 기록{record_date_display}</h2>
-            </div>
+    <div class="center-content">
+        <h1 class="main-title" style="margin-bottom: 1rem;">📝 루틴 카테고리 기록</h1>
+        <p class="subtitle" style="margin-bottom: 2rem;"></p>
+        
     """, unsafe_allow_html=True)
     
     # 모달 내용
     with st.form("category_form", clear_on_submit=False):
         activity_input = st.text_input(
-            "어떤 활동을 했나요? *",
+            "어떤 활동을 하고 싶으신가요? *",
             placeholder="예: 아침 명상, 운동, 독서, 요리 등",
             key="modal_activity"
         )
         
-        # AI 카테고리 제안 버튼
-        col_ai1, col_ai2 = st.columns([3, 1])
-        with col_ai1:
-            st.markdown("")
-        with col_ai2:
-            get_suggestion = st.form_submit_button("🤖 AI 제안", use_container_width=True)
-        
-        # AI 제안 표시
-        if get_suggestion and activity_input:
-            with st.spinner("AI가 카테고리를 분석 중입니다..."):
-                try:
-                    suggestion = get_routine_category_suggestion(activity_input)
-                    st.session_state.category_suggestion = suggestion
-                except Exception as e:
-                    st.error(f"AI 제안을 가져오는 중 오류가 발생했습니다: {str(e)}")
-                    st.session_state.category_suggestion = None
-        
-        # AI 제안 결과 표시
-        if st.session_state.category_suggestion:
-            suggestion = st.session_state.category_suggestion
-            st.markdown(f"""
-            <div class="ai-suggestion-card">
-                <div class="ai-suggestion-title">✨ AI 추천 카테고리</div>
-                <div>
-                    <span class="category-badge">{suggestion.get('suggested_category', '기타')}</span>
-                    <p style="color: #6C7A89; font-size: 0.9rem; margin: 0.5rem 0;">
-                        {suggestion.get('category_description', '')}
-                    </p>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # 대안 카테고리
-            if suggestion.get('alternative_categories'):
-                st.markdown("**다른 카테고리 옵션:**")
-                alt_cols = st.columns(len(suggestion['alternative_categories']))
-                for idx, alt in enumerate(suggestion['alternative_categories']):
-                    with alt_cols[idx]:
-                        st.markdown(f"""
-                        <div style="background: #F7F9FA; padding: 0.8rem; border-radius: 12px; text-align: center;">
-                            <div style="font-weight: 600; color: #2C3E50; margin-bottom: 0.3rem;">
-                                {alt.get('name', '')}
-                            </div>
-                            <div style="font-size: 0.8rem; color: #6C7A89;">
-                                {alt.get('reason', '')}
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-            
-            # 제안 루틴
-            if suggestion.get('routines'):
-                st.markdown("**💡 추천 루틴:**")
-                for routine in suggestion['routines']:
-                    st.markdown(f"""
-                    <div class="routine-suggestion">
-                        <div class="routine-suggestion-name">{routine.get('name', '')}</div>
-                        <div class="routine-suggestion-desc">{routine.get('description', '')}</div>
-                        <div class="routine-suggestion-time">⏱️ {routine.get('time_estimate', '')}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+       
         
         # 카테고리 선택
         suggested_category = None
