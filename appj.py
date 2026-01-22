@@ -1713,7 +1713,8 @@ if st.session_state.show_record_form:
                     time_format_valid = False
                 
                 if time_format_valid:
-                    if start_time >= end_time:
+                    # 수면 카테고리는 자정을 넘어가는 시간을 허용 (예: 23:00 ~ 07:00)
+                    if start_time >= end_time and category != "수면":
                         st.warning("종료 시간은 시작 시간보다 늦어야 합니다.")
                     else:
                         add_record(activity, category, start_time_str, end_time_str, memo)
@@ -2096,7 +2097,8 @@ if st.session_state.editing_record_id and st.session_state.editing_record_data:
                     time_format_valid = False
                 
                 if time_format_valid:
-                    if start_time_edit >= end_time_edit:
+                    # 수면 카테고리는 자정을 넘어가는 시간을 허용 (예: 23:00 ~ 07:00)
+                    if start_time_edit >= end_time_edit and category_edit != "수면":
                         st.warning("종료 시간은 시작 시간보다 늦어야 합니다.")
                     else:
                         success = update_record(
@@ -2231,7 +2233,8 @@ if st.session_state.show_category_modal and not st.session_state.editing_record_
                     time_format_valid = False
                 
                 if time_format_valid:
-                    if start_time >= end_time:
+                    # 수면 카테고리는 자정을 넘어가는 시간을 허용 (예: 23:00 ~ 07:00)
+                    if start_time >= end_time and category != "수면":
                         st.warning("종료 시간은 시작 시간보다 늦어야 합니다.")
                     else:
                         # 선택한 날짜가 있으면 해당 날짜로 저장, 없으면 오늘 날짜로 저장
