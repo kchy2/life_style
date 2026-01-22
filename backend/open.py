@@ -4,8 +4,14 @@ from datetime import datetime
 from openai import OpenAI
 from dotenv import load_dotenv
 
-# .env 파일 로드
-load_dotenv()
+# .env 파일 로드 (프로젝트 루트에서 찾기)
+# 현재 파일의 디렉토리에서 상위 디렉토리(프로젝트 루트)로 이동
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(current_dir)
+env_path = os.path.join(project_root, '.env')
+
+# .env 파일 로드 (프로젝트 루트 경로 명시)
+load_dotenv(dotenv_path=env_path)
 
 # 프롬프트 파일에서 읽어오기
 def load_ai_prompt():
@@ -68,7 +74,23 @@ def get_openai_client():
         api_key = os.environ.get("OPENAI_API_KEY")
     
     if not api_key:
-        raise ValueError("OPENAI_API_KEY가 .env 파일에 설정되지 않았습니다.")
+        # .env 파일 경로 확인
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(current_dir)
+        env_path = os.path.join(project_root, '.env')
+        
+        error_msg = "OPENAI_API_KEY가 설정되지 않았습니다.\n\n"
+        if os.path.exists(env_path):
+            error_msg += f"✅ .env 파일은 존재합니다: {env_path}\n"
+            error_msg += "⚠️ .env 파일에 다음 형식으로 OPENAI_API_KEY를 추가해주세요:\n"
+            error_msg += "   OPENAI_API_KEY=sk-your-api-key-here\n"
+        else:
+            error_msg += f"❌ .env 파일을 찾을 수 없습니다: {env_path}\n"
+            error_msg += "📝 프로젝트 루트에 .env 파일을 생성하고 다음 내용을 추가해주세요:\n"
+            error_msg += "   OPENAI_API_KEY=sk-your-api-key-here\n"
+        
+        error_msg += "\n💡 OpenAI API 키는 https://platform.openai.com/api-keys 에서 발급받을 수 있습니다."
+        raise ValueError(error_msg)
     
     return OpenAI(api_key=api_key)
 
@@ -133,7 +155,7 @@ def load_routine_data_for_advice() -> str:
         return "데이터를 불러올 수 없습니다."
 
 def load_database_records_for_feedback() -> str:
-    """데이터베이스의 기록을 읽어서 실시간 피드백에 사용할 데이터 문자열 반환"""
+    """데이터베이스의 기록을 읽어서 통계 기반 종합 피드백에 사용할 데이터 문자열 반환"""
     try:
         from database import get_all_records, get_statistics
         from datetime import datetime, timedelta
@@ -145,22 +167,41 @@ def load_database_records_for_feedback() -> str:
         
         # 데이터 요약 정보 생성
         summary_lines = []
-        summary_lines.append("=== 사용자 루틴 데이터 요약 ===\n")
+        summary_lines.append("=== 통계 기반 종합 분석 데이터 ===\n")
+        
+        # 전체 통계 정보
+        stats = get_statistics()
+        summary_lines.append("📊 전체 통계 요약:")
+        summary_lines.append(f"  - 총 기록 수: {stats['total_records']}개")
         
         # 날짜별 통계
         dates = [r['date'] for r in all_records]
         unique_dates = len(set(dates))
         min_date = min(dates)
         max_date = max(dates)
-        summary_lines.append(f"기록된 날짜: {unique_dates}일")
-        summary_lines.append(f"기간: {min_date} ~ {max_date}\n")
+        summary_lines.append(f"  - 기록된 날짜: {unique_dates}일")
+        summary_lines.append(f"  - 기간: {min_date} ~ {max_date}")
         
-        # 카테고리별 통계
+        # 최근 7일 기록 수
+        today = datetime.now().date()
+        week_ago = today - timedelta(days=7)
+        recent_week_records = [r for r in all_records if r['date'] >= week_ago.isoformat()]
+        summary_lines.append(f"  - 최근 7일 기록 수: {len(recent_week_records)}개")
+        summary_lines.append("")
+        
+        # 카테고리별 상세 통계
         category_counts = {}
         category_times = {}
+        category_avg_times = {}
+        category_records_list = {}
+        
         for record in all_records:
             cat = record['category']
             category_counts[cat] = category_counts.get(cat, 0) + 1
+            
+            if cat not in category_records_list:
+                category_records_list[cat] = []
+            category_records_list[cat].append(record)
             
             # 시간 계산
             try:
@@ -173,36 +214,95 @@ def load_database_records_for_feedback() -> str:
             except:
                 pass
         
-        summary_lines.append("카테고리별 활동 횟수:")
-        for cat, count in sorted(category_counts.items(), key=lambda x: x[1], reverse=True):
-            hours = category_times.get(cat, 0)
-            summary_lines.append(f"  - {cat}: {count}회 (총 {hours:.1f}시간)")
+        # 카테고리별 평균 시간 계산
+        for cat in category_counts:
+            if category_counts[cat] > 0:
+                category_avg_times[cat] = category_times.get(cat, 0) / category_counts[cat]
+        
+        summary_lines.append("📈 카테고리별 상세 통계:")
+        for cat in sorted(category_counts.items(), key=lambda x: x[1], reverse=True):
+            cat_name = cat[0]
+            count = cat[1]
+            total_hours = category_times.get(cat_name, 0)
+            avg_hours = category_avg_times.get(cat_name, 0)
+            percentage = (count / stats['total_records'] * 100) if stats['total_records'] > 0 else 0
+            summary_lines.append(f"  - {cat_name}:")
+            summary_lines.append(f"    * 기록 수: {count}회 ({percentage:.1f}%)")
+            summary_lines.append(f"    * 총 시간: {total_hours:.1f}시간")
+            summary_lines.append(f"    * 평균 시간: {avg_hours:.2f}시간/회")
         summary_lines.append("")
         
-        # 최근 활동 (최근 10개)
-        summary_lines.append("최근 활동 기록:")
-        recent_records = sorted(all_records, key=lambda x: x['timestamp'], reverse=True)[:10]
-        for record in recent_records:
-            memo_text = record.get('memo', '').strip() if record.get('memo') else ""
-            if memo_text:
-                summary_lines.append(f"  [{record['date']}] {record['start_time']}-{record['end_time']} | {record['activity']} | {record['category']} | 메모: {memo_text}")
-            else:
-                summary_lines.append(f"  [{record['date']}] {record['start_time']}-{record['end_time']} | {record['activity']} | {record['category']}")
-        summary_lines.append("")
+        # 시간대별 활동 패턴 분석
+        hourly_counts = {}
+        for record in all_records:
+            try:
+                hour = int(record['start_time'].split(':')[0])
+                hourly_counts[hour] = hourly_counts.get(hour, 0) + 1
+            except:
+                pass
         
-        # 통계 정보
-        stats = get_statistics()
-        summary_lines.append("전체 통계:")
-        summary_lines.append(f"  - 총 기록 수: {stats['total_records']}개")
+        if hourly_counts:
+            summary_lines.append("⏰ 시간대별 활동 패턴:")
+            # 가장 활발한 시간대
+            most_active_hour = max(hourly_counts.items(), key=lambda x: x[1])[0] if hourly_counts else None
+            if most_active_hour is not None:
+                summary_lines.append(f"  - 가장 활발한 시간대: {most_active_hour}시 ({hourly_counts[most_active_hour]}회)")
+            # 시간대별 분포
+            summary_lines.append("  - 시간대별 활동 분포:")
+            for hour in sorted(hourly_counts.keys()):
+                summary_lines.append(f"    * {hour}시: {hourly_counts[hour]}회")
+            summary_lines.append("")
+        
+        # 일일 평균 기록 수
+        if unique_dates > 0:
+            avg_daily_records = stats['total_records'] / unique_dates
+            summary_lines.append(f"📅 일일 평균 기록 수: {avg_daily_records:.1f}개/일")
+            summary_lines.append("")
+        
+        # 최근 활동 패턴 (최근 7일)
+        summary_lines.append("📋 최근 7일 활동 패턴:")
+        recent_week_by_date = {}
+        for record in recent_week_records:
+            date = record['date']
+            if date not in recent_week_by_date:
+                recent_week_by_date[date] = []
+            recent_week_by_date[date].append(record)
+        
+        for date in sorted(recent_week_by_date.keys(), reverse=True):
+            day_records = recent_week_by_date[date]
+            summary_lines.append(f"  - {date}: {len(day_records)}개 기록")
         summary_lines.append("")
         
         # 오늘의 활동
-        today = datetime.now().date().isoformat()
-        today_records = [r for r in all_records if r['date'] == today]
+        today_str = today.isoformat()
+        today_records = [r for r in all_records if r['date'] == today_str]
         if today_records:
-            summary_lines.append(f"오늘({today}) 활동:")
+            summary_lines.append(f"🌅 오늘({today_str}) 활동:")
             for record in today_records:
-                summary_lines.append(f"  - {record['start_time']}-{record['end_time']}: {record['activity']} ({record['category']})")
+                try:
+                    start = datetime.strptime(record['start_time'], "%H:%M")
+                    end = datetime.strptime(record['end_time'], "%H:%M")
+                    if end < start:
+                        end += timedelta(days=1)
+                    duration = (end - start).total_seconds() / 60  # 분 단위
+                    summary_lines.append(f"  - {record['start_time']}-{record['end_time']} ({duration:.0f}분): {record['activity']} ({record['category']})")
+                except:
+                    summary_lines.append(f"  - {record['start_time']}-{record['end_time']}: {record['activity']} ({record['category']})")
+            summary_lines.append("")
+        
+        # 활동 연속성 분석 (최근 기록의 일관성)
+        if len(recent_week_records) > 0:
+            consecutive_days = 0
+            current_date = today
+            for i in range(7):
+                date_str = current_date.isoformat()
+                if any(r['date'] == date_str for r in all_records):
+                    consecutive_days += 1
+                else:
+                    break
+                current_date -= timedelta(days=1)
+            
+            summary_lines.append(f"📊 활동 연속성: 최근 {consecutive_days}일 연속 기록")
             summary_lines.append("")
         
         return "\n".join(summary_lines)
@@ -212,17 +312,9 @@ def load_database_records_for_feedback() -> str:
         traceback.print_exc()
         return "데이터를 불러올 수 없습니다."
 
-def get_realtime_feedback(stat_type: str = "general") -> dict:
+def get_realtime_feedback() -> dict:
     """
     데이터베이스 기록을 기반으로 실시간 피드백 생성
-    
-    Args:
-        stat_type: 통계 타입 ("date", "category", "time", "overall", "general")
-            - "date": 날짜별 통계에 대한 피드백
-            - "category": 카테고리별 통계에 대한 피드백
-            - "time": 시간 분석에 대한 피드백
-            - "overall": 전체 통계에 대한 피드백
-            - "general": 일반적인 피드백 (기본값)
     
     Returns:
         dict: JSON 형식의 피드백 데이터
@@ -241,62 +333,8 @@ def get_realtime_feedback(stat_type: str = "general") -> dict:
         # 데이터베이스 기록 로드
         routine_data_summary = load_database_records_for_feedback()
         
-        # 통계 타입별 프롬프트 커스터마이징
-        stat_type_contexts = {
-            "date": {
-                "focus": "날짜별 기록 패턴과 일관성",
-                "analysis_points": [
-                    "최근 30일간의 기록 일관성",
-                    "기록 빈도의 변화 추이",
-                    "특정 요일이나 기간의 패턴",
-                    "기록이 많은 날과 적은 날의 특징"
-                ]
-            },
-            "category": {
-                "focus": "카테고리별 시간 분배와 균형",
-                "analysis_points": [
-                    "카테고리별 시간 분배의 균형",
-                    "가장 많은 시간을 투자하는 카테고리",
-                    "부족한 카테고리와 개선 방안",
-                    "카테고리별 활동의 다양성"
-                ]
-            },
-            "time": {
-                "focus": "시간대별 활동 패턴과 효율성",
-                "analysis_points": [
-                    "시간대별 활동 시작 패턴",
-                    "가장 활발한 시간대",
-                    "활동 시간의 효율성",
-                    "카테고리별 평균 활동 시간의 적절성"
-                ]
-            },
-            "overall": {
-                "focus": "전체적인 루틴 패턴과 종합 평가",
-                "analysis_points": [
-                    "전체 기록의 일관성과 지속성",
-                    "주간 활동 추이와 트렌드",
-                    "총 활동 시간과 평균 활동 시간",
-                    "전체적인 루틴의 균형과 개선점"
-                ]
-            },
-            "general": {
-                "focus": "전반적인 루틴 패턴",
-                "analysis_points": [
-                    "수면 시간과 패턴",
-                    "카테고리별 시간 분배",
-                    "활동의 연속성과 규칙성",
-                    "오늘의 활동과 최근 패턴 비교"
-                ]
-            }
-        }
-        
-        context = stat_type_contexts.get(stat_type, stat_type_contexts["general"])
-        
-        # 실시간 피드백 프롬프트
-        feedback_prompt = f"""너는 사용자의 일상 루틴 데이터를 실시간으로 분석하여 즉각적인 피드백을 제공하는 AI 코치입니다.
-
-**현재 분석 중인 통계 타입: {stat_type}**
-**분석 초점: {context['focus']}**
+        # 통계 기반 종합 피드백 프롬프트
+        feedback_prompt = """너는 사용자의 루틴 통계 데이터를 종합적으로 분석하여 하나의 통합된 피드백을 제공하는 AI 코치입니다.
 
 **중요: 반드시 JSON 형식으로만 응답해야 합니다. 다른 텍스트나 설명은 포함하지 마세요.**
 
@@ -308,21 +346,21 @@ def get_realtime_feedback(stat_type: str = "general") -> dict:
 
 **출력 형식:**
 {
-  "summary": "한 줄 요약 (50자 이내, 존댓말로 작성)",
+  "summary": "통계를 종합한 한 줄 요약 (50자 이내, 존댓말로 작성)",
   "feedbacks": [
     {
-      "title": "피드백 제목 (존댓말)",
-      "description": "구체적인 피드백 설명 (존댓말, 현실적이고 사실 기반)",
+      "title": "종합 피드백 제목 (존댓말)",
+      "description": "모든 통계를 종합한 구체적인 피드백 설명 (존댓말, 현실적이고 사실 기반)",
       "type": "positive"
     },
     {
-      "title": "피드백 제목 (존댓말)",
-      "description": "구체적인 피드백 설명 (존댓말, 현실적이고 사실 기반)",
+      "title": "종합 피드백 제목 (존댓말)",
+      "description": "모든 통계를 종합한 구체적인 피드백 설명 (존댓말, 현실적이고 사실 기반)",
       "type": "suggestion"
     },
     {
-      "title": "피드백 제목 (존댓말)",
-      "description": "구체적인 피드백 설명 (존댓말, 현실적이고 사실 기반)",
+      "title": "종합 피드백 제목 (존댓말)",
+      "description": "모든 통계를 종합한 구체적인 피드백 설명 (존댓말, 현실적이고 사실 기반)",
       "type": "neutral"
     }
   ],
@@ -330,43 +368,52 @@ def get_realtime_feedback(stat_type: str = "general") -> dict:
 }
 
 **피드백 작성 규칙:**
-1. 제공된 루틴 데이터를 반드시 기반으로 하여 피드백을 작성하세요
-2. 데이터에서 확인된 실제 패턴, 시간 분배, 카테고리별 활동을 참고하세요
-3. 긍정적인 점을 먼저 언급하고, 개선 가능한 점을 건설적으로 제안하세요
-4. type은 "positive" (긍정적), "suggestion" (제안), "neutral" (중립적) 중 하나
-5. 현실적이고 실행 가능한 피드백만 제공하세요
-6. 최근 활동 패턴과 트렌드를 고려하세요
+1. 제공된 통계 데이터를 종합적으로 분석하여 하나의 통합된 피드백을 작성하세요
+2. 통계별로 따로 피드백을 만들지 말고, 모든 통계를 종합하여 전체적인 패턴을 분석하세요
+3. 다음 통계 요소들을 모두 고려하여 종합적으로 분석하세요:
+   - 전체 기록 수와 기록 기간
+   - 카테고리별 기록 수, 총 시간, 평균 시간, 비율
+   - 시간대별 활동 패턴
+   - 일일 평균 기록 수
+   - 최근 활동 패턴과 연속성
+   - 오늘의 활동
+4. 긍정적인 점을 먼저 언급하고, 개선 가능한 점을 건설적으로 제안하세요
+5. type은 "positive" (긍정적), "suggestion" (제안), "neutral" (중립적) 중 하나
+6. 현실적이고 실행 가능한 피드백만 제공하세요
+7. 통계 데이터에서 발견된 패턴과 트렌드를 종합적으로 분석하세요
 
-**데이터 분석 시 고려사항 (이 통계 타입에 특화된 분석):**
-{chr(10).join(f"- {point}" for point in context['analysis_points'])}
+**통계 종합 분석 시 고려사항:**
+- 카테고리별 시간 분배의 균형 (수면, 식사, 일과, 운동, 취미, 기타)
+- 가장 많은 시간을 투자하는 카테고리와 가장 적은 카테고리
+- 시간대별 활동 패턴 (언제 가장 활발한지)
+- 기록의 일관성과 연속성
+- 일일 평균 기록 수와 최근 트렌드
+- 오늘의 활동이 전체 패턴과 어떻게 일치하는지
 
-**예시 (존댓말 톤):**
-- "오늘도 꾸준히 기록을 남기고 계시네요! 일과 시간이 잘 유지되고 있습니다."
-- "수면 패턴을 보니 규칙적으로 잘 지키고 계시는 것 같습니다. 이 패턴을 유지하시면 좋겠습니다."
-- "운동 시간을 조금 더 늘려보시는 것은 어떨까요? 주 3회 정도로 규칙적으로 하시면 좋을 것 같습니다."
+**예시 (존댓말 톤, 통계 종합):**
+- "전체 통계를 보니 꾸준히 기록을 남기고 계시네요! 카테고리별 시간 분배가 잘 이루어지고 있습니다."
+- "카테고리별 통계를 종합해보니 운동 시간이 상대적으로 적은 편입니다. 주 3회 정도로 규칙적으로 늘려보시면 좋을 것 같습니다."
+- "시간대별 패턴을 보니 오전 시간대에 활동이 집중되어 있네요. 저녁 시간에도 일부 활동을 분산시키면 더 균형잡힌 하루가 될 것 같습니다."
 
 **규칙:**
 1. JSON 형식만 출력 (마크다운, 코드 블록 없이)
-2. summary는 50자 이내로 간결하게 (존댓말)
+2. summary는 50자 이내로 간결하게 (존댓말, 통계 종합 요약)
 3. feedbacks 배열은 반드시 3개의 피드백 포함
 4. type은 "positive", "suggestion", "neutral" 중 하나
-5. description은 실행 가능한 구체적인 피드백 (존댓말, 현실적)
+5. description은 모든 통계를 종합한 실행 가능한 구체적인 피드백 (존댓말, 현실적)
 6. timestamp는 ISO 8601 형식 또는 "YYYY-MM-DD HH:MM:SS" 형식
 7. 모든 텍스트는 존댓말로 작성
-8. 데이터에 없는 내용은 추측하지 말고, 실제 데이터만 기반으로 피드백"""
+8. 데이터에 없는 내용은 추측하지 말고, 실제 통계 데이터만 기반으로 종합 피드백
+9. 통계별로 따로 피드백을 만들지 말고, 모든 통계를 하나로 종합하여 분석"""
         
-        user_message = f"""사용자의 루틴 데이터를 분석하여 실시간 피드백을 제공해주세요.
-
-**분석 초점: {context['focus']}**
+        user_message = f"""사용자의 루틴 통계 데이터를 종합적으로 분석하여 하나의 통합된 피드백을 제공해주세요.
 
 {routine_data_summary}
 
-위 루틴 데이터를 반드시 기반으로 하여, **{context['focus']}**에 특화된 피드백을 제공해주세요.
-특히 다음 사항들을 중점적으로 분석해주세요:
-{chr(10).join(f"- {point}" for point in context['analysis_points'])}
-
-긍정적인 점과 개선 가능한 점을 균형있게 존댓말(경어체)로 작성해주세요. 
-데이터에서 확인된 실제 패턴과 사실만을 바탕으로 피드백하시고, 추측이나 이상적인 조언은 피해주세요."""
+위 통계 데이터를 종합적으로 분석하여, 통계별로 따로 피드백을 만들지 말고 모든 통계를 하나로 통합하여 종합적인 피드백을 작성해주세요.
+- 카테고리별 통계, 시간대별 패턴, 기록 연속성, 일일 평균 등을 모두 종합하여 분석하세요
+- 긍정적인 점과 개선 가능한 점을 균형있게 존댓말(경어체)로 작성해주세요
+- 통계 데이터에서 확인된 실제 패턴과 사실만을 바탕으로 종합 피드백하시고, 추측이나 이상적인 조언은 피해주세요"""
         
         completion = openai_client.chat.completions.create(
             model="gpt-4o",
