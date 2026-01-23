@@ -157,6 +157,13 @@ def load_routine_data_for_advice() -> str:
 def load_database_records_for_feedback() -> str:
     """데이터베이스의 기록을 읽어서 통계 기반 종합 피드백에 사용할 데이터 문자열 반환"""
     try:
+        # database 모듈 import (경로 문제 해결)
+        import sys
+        import os
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        if current_dir not in sys.path:
+            sys.path.insert(0, current_dir)
+        
         from database import get_all_records, get_statistics
         from datetime import datetime, timedelta
         
