@@ -2171,7 +2171,7 @@ if st.session_state.show_category_modal and not st.session_state.editing_record_
     # 모달 내용
     with st.form("category_form", clear_on_submit=False):
         activity_input = st.text_input(
-            "어떤 활동을 하고 싶으신가요? *",
+            "어떤 활동을 했나요? *",
             placeholder="예: 아침 명상, 운동, 독서, 요리 등",
             key="modal_activity"
         )
